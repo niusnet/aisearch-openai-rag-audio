@@ -1,20 +1,23 @@
-# Etapa 1: Construcción del contenedor base para el frontend
+# Stage 1: Build the frontend
 FROM node:18 AS build
 
-# Establecer el directorio de trabajo
+# Set the working directory
 WORKDIR /app
 
-# Copiar los archivos del frontend al contenedor
-COPY ./frontend /app
+# Copy all files from the current directory (frontend) to /app in the container
+COPY . /app
 
-# Instalar las dependencias y construir el proyecto
+# Install dependencies and build the project
 RUN npm install && npm run build
 
-# Etapa 2: Servir el frontend usando un servidor estático
+# Stage 2: Serve the frontend using Nginx
 FROM nginx:alpine
 
-# Copiar los archivos construidos al servidor nginx
+# Copy the built files from the previous stage to Nginx's default directory
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Exponer el puerto (usualmente el 80 para HTTP)
+# Expose port 80
 EXPOSE 80
+
+# Start Nginx when the container launches
+CMD ["nginx", "-g", "daemon off;"]
