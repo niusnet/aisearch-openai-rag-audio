@@ -6,7 +6,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
     plugins: [react()],
     build: {
-        outDir: "../backend/static",
+        outDir: "dist", // Changed from "../backend/static" to "dist"
         emptyOutDir: true,
         sourcemap: true
     },
