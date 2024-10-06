@@ -1,20 +1,12 @@
 services:
-  backend:
+  voicerag:
     build:
-      context: ./app/backend
-      dockerfile: Dockerfile  # Ensure the Dockerfile is named 'Dockerfile'
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     environment:
       - YOUR_ENV_VAR=default_value
     volumes:
-      - ./app/backend:/app
-
-  frontend:
-    build:
-      context: ./app/frontend
-      dockerfile: Dockerfile  # Ensure the Dockerfile is named 'Dockerfile'
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
+      - ./app/backend:/app/backend
+      - ./app/frontend:/app/frontend

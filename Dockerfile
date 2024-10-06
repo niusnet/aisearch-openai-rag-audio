@@ -1,32 +1,32 @@
-# Etapa 1: Construir el frontend
+# Stage 1: Build the frontend
 FROM node:18 AS frontend-builder
 
-# Establecer el directorio de trabajo para el frontend
+# Set the working directory for the frontend
 WORKDIR /app/frontend
 
-# Copiar el código del frontend
+# Copy the frontend code
 COPY ./app/frontend/ .
 
-# Instalar dependencias y construir el frontend
+# Install dependencies and build the frontend
 RUN npm install && npm run build
 
-# Etapa 2: Configurar el backend
+# Stage 2: Set up the backend
 FROM python:3.11-slim AS backend
 
-# Establecer el directorio de trabajo para el backend
+# Set the working directory for the backend
 WORKDIR /app/backend
 
-# Copiar el código del backend
+# Copy the backend code
 COPY ./app/backend/ .
 
-# Copiar los archivos estáticos construidos del frontend al backend
+# Copy the built static files from the frontend to the backend
 COPY --from=frontend-builder /app/frontend/dist ./static
 
-# Instalar dependencias del backend
+# Install backend dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Exponer el puerto en el que se ejecutará el backend
+# Expose the port on which the backend will run
 EXPOSE 8000
 
-# Definir el comando por defecto para ejecutar la aplicación backend
+# Define the default command to run the backend application
 CMD ["python", "app.py"]
