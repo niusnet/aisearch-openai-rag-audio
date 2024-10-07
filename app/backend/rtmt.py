@@ -42,15 +42,12 @@ class RTToolCall:
 
 class RTMiddleTier:
     endpoint: str
-    deployment: str
+    deployment: Optional[str] = None
     key: Optional[str] = None
-    
-    # Tools are server-side only for now, though the case could be made for client-side tools
-    # in addition to server-side tools that are invisible to the client
+    provider: str
+
     tools: dict[str, Tool] = {}
 
-    # Server-enforced configuration, if set, these will override the client's configuration
-    # Typically at least the model name and system message will be set by the server
     model: Optional[str] = None
     system_message: Optional[str] = None
     temperature: Optional[float] = None
@@ -60,14 +57,20 @@ class RTMiddleTier:
     _tools_pending = {}
     _token_provider = None
 
-    def __init__(self, endpoint: str, deployment: str, credentials: AzureKeyCredential | DefaultAzureCredential):
+    def __init__(self, endpoint: str, deployment: Optional[str], credentials: Any, provider: str = 'azure'):
         self.endpoint = endpoint
         self.deployment = deployment
-        if isinstance(credentials, AzureKeyCredential):
-            self.key = credentials.key
+        self.provider = provider
+        if provider == 'azure':
+            if isinstance(credentials, AzureKeyCredential):
+                self.key = credentials.key
+            else:
+                self._token_provider = get_bearer_token_provider(credentials, "https://cognitiveservices.azure.com/.default")
+                self._token_provider()
+        elif provider == 'openai':
+            self.key = credentials if isinstance(credentials, str) else credentials.key
         else:
-            self._token_provider = get_bearer_token_provider(credentials, "https://cognitiveservices.azure.com/.default")
-            self._token_provider() # Warm up during startup so we have a token cached when the first request arrives
+            raise ValueError(f"Unknown provider {self.provider}")
 
     async def _process_message_to_client(self, msg: str, client_ws: web.WebSocketResponse, server_ws: web.WebSocketResponse) -> Optional[str]:
         message = json.loads(msg.data)
@@ -166,17 +169,28 @@ class RTMiddleTier:
                     updated_message = json.dumps(message)
 
         return updated_message
+        ...
 
     async def _forward_messages(self, ws: web.WebSocketResponse):
         async with aiohttp.ClientSession(base_url=self.endpoint) as session:
-            params = { "api-version": "2024-10-01-preview", "deployment": self.deployment }
+            params = {}
             headers = {}
-            if "x-ms-client-request-id" in ws.headers:
-                headers["x-ms-client-request-id"] = ws.headers["x-ms-client-request-id"]
-            if self.key is not None:
-                headers = { "api-key": self.key }
+            if self.provider == 'azure':
+                params = { "api-version": "2024-10-01-preview", "deployment": self.deployment }
+                if "x-ms-client-request-id" in ws.headers:
+                    headers["x-ms-client-request-id"] = ws.headers["x-ms-client-request-id"]
+                if self.key is not None:
+                    headers["api-key"] = self.key
+                else:
+                    headers["Authorization"] = f"Bearer {self._token_provider()}"
+                ws_endpoint = "/openai/realtime"
+            elif self.provider == 'openai':
+                headers["Authorization"] = f"Bearer {self.key}"
+                headers["OpenAI-Beta"] = "true"
+                ws_endpoint = "/v1/chat/completions"
             else:
                 headers = { "Authorization": f"Bearer {self._token_provider()}" } # NOTE: no async version of token provider, maybe refresh token on a timer?
+                
             async with session.ws_connect("/openai/realtime", headers=headers, params=params) as target_ws:
                 async def from_client_to_server():
                     async for msg in ws:
